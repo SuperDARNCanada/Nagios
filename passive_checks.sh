@@ -2,7 +2,7 @@
 
 NAGIOS_PLUGINS=/usr/local/nagios/lib/
 NSCA=/usr/local/nagios/bin/send_nsca
-HOSTNAME=${RADARID}
+HOSTNAME=hostname
 #SERVER=sdcopy.usask.ca
 SERVER=128.233.224.39
 NSCA_CONFIG=/usr/local/nagios/etc/send_nsca.cfg
