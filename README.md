@@ -9,7 +9,7 @@ Instructions for installing and using NRPE can be found in [this](https://github
 ### nrpe installation on client
 You may need to install openssl library before configuring nrpe. On openSuSE 15.1 that is accomplished by:
 
-'''bash
+'''
 sudo zypper in libopenssl-1\_1-devel
 '''
 
