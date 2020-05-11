@@ -1,0 +1,125 @@
+#!/usr/bin/python
+
+import argparse
+import logging
+import os
+import sys
+import datetime
+import json
+import glob
+
+#sys.path.append(os.environ["BOREALISPATH"])
+
+# NAGIOS return codes :
+# https://nagios-plugins.org/doc/guidelines.html#AEN78
+OK = 0
+WARNING = 1
+CRITICAL = 2
+UNKNOWN = 3
+
+
+mylogger = logging.getLogger(__name__)
+
+
+def debug_factory(logger, debug_level):
+	"""
+	Decorate logger in order to add custom levels for Nagios
+	"""
+
+	def custom_debug(msg, *args, **kwargs):
+		if logger.level >= debug_level:
+			return
+		logger._log(debug_level, msg, args, kwargs)
+
+	return custom_debug
+
+
+def get_args():
+	"""
+	Supports the command-line arguments listed below.
+	"""
+	parser = argparse.ArgumentParser(description="Borealis Check")
+	parser._optionals.title = "Options"
+	parser.add_argument('-s', '--seconds-since-update', required=False,
+						help='how many seconds can the data file be out of date',
+						dest='seconds_since_update', type=float, default=5.0)
+	parser.add_argument('-v', '--verbose', required=False, help='enable verbose output',
+						dest='verbose', action='store_true')
+	parser.add_argument('--no-nagios', required=False, help='disable Nagios output mode',
+						dest='no_nagios_output', action='store_true')
+        parser.add_argument('-p', '--borealis-path', required=False, help='Path to Borealis directory', 
+                                                dest='borealis_path', default='/home/radar/borealis/')
+	args = parser.parse_args()
+	return args
+
+
+def main():
+	# Handling arguments
+	args = get_args()
+	seconds_since_update = args.seconds_since_update
+	verbose = args.verbose
+	no_nagios_output = args.no_nagios_output
+        borealis_path = args.borealis_path
+
+	# Logging settings
+	if verbose:
+		log_level = logging.DEBUG
+	else:
+		log_level = logging.INFO
+
+	if not no_nagios_output:
+		# Add custom level unknown
+		logging.addLevelName(logging.DEBUG + 1, 'UNKOWN')
+		setattr(mylogger, 'unkown', debug_factory(mylogger, logging.DEBUG + 1))
+
+		# Change INFO LevelName to OK
+		logging.addLevelName(logging.INFO, 'OK')
+
+		# Setting output format for Nagios
+                logging.basicConfig(stream=sys.stdout, format='BOREALIS %(levelname)s: %(message)s', level=logging.INFO)
+	else:
+		logging.basicConfig(stream=sys.stdout, format='%(asctime)s %(levelname)s %(message)s', level=log_level)
+
+	#if not os.environ["BOREALISPATH"]:
+	#	mylogger.critical("BOREALISPATH env variable not set")
+	#	sys.exit(UNKNOWN)
+	#config_path = os.environ["BOREALISPATH"] + "/config.ini"
+	if not os.path.exists(borealis_path):
+                mylogger.critical("BOREALISPATH: {} doesn't exist".format(borealis_path))
+		sys.exit(UNKNOWN)
+        config_path = borealis_path + "/config.ini" 
+        try:
+		with open(config_path, 'r') as config_data:
+			raw_config = json.load(config_data)
+			data_directory = raw_config["data_directory"]
+	except IOError:
+		mylogger.critical('Cannot open config file at {0}'.format(config_path))
+		sys.exit(UNKNOWN)
+        
+	#####################################
+	# Borealis data check               #
+	#####################################
+
+	# Get today's date and look for the current data file being written
+	today = datetime.datetime.today().strftime("%Y%m%d")
+	today_data_files = glob.glob("{}/{}/*".format(data_directory, today))
+	newest_file = max(today_data_files, key=os.path.getmtime)
+	new_file_write_time = os.path.getmtime(newest_file)
+	now_utc_seconds = float(datetime.datetime.utcnow().strftime("%s"))
+
+	# How many seconds ago was the last write to a data file?
+	last_data_write = now_utc_seconds - new_file_write_time
+	mylogger.debug('Write: {}, Now: {}, Diff: {} s'.format(new_file_write_time, now_utc_seconds, last_data_write))
+
+	# if under the threshold it is OK, if not then there's a problem
+	if float(last_data_write) <= float(seconds_since_update):
+		mylogger.info("%s seconds since last write" % last_data_write)
+		sys.exit(OK)
+	else:
+		mylogger.critical("%s" % last_data_write)
+		sys.exit(CRITICAL)
+
+
+if __name__ == "__main__":
+    	main()
+
