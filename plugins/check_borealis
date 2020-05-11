@@ -1,125 +1,166 @@
 #!/usr/bin/python
+# Copyright 2020 SuperDARN Canada, University of Saskatchewan
+# Author: Kevin Krieger
+"""
+NAGIOS plugin to check that Borealis files are being written, a good indicator that everything is
+working correctly. Code from https://gist.github.com/amine7536/d867dc177e69df3aef65 was used
+and modified slightly.
 
+Classes
+-------
+
+Methods
+-------
+
+
+References
+----------
+
+https://nagios-plugins.org/doc/guidelines.html
+https://gist.github.com/amine7536/d867dc177e69df3aef65
+
+"""
 import argparse
 import logging
 import os
 import sys
-import datetime
 import json
+from datetime import datetime as dt
 import glob
-
-#sys.path.append(os.environ["BOREALISPATH"])
+import subprocess
+import time
 
 # NAGIOS return codes :
-# https://nagios-plugins.org/doc/guidelines.html#AEN78
 OK = 0
 WARNING = 1
 CRITICAL = 2
 UNKNOWN = 3
 
-
 mylogger = logging.getLogger(__name__)
 
 
 def debug_factory(logger, debug_level):
-	"""
-	Decorate logger in order to add custom levels for Nagios
-	"""
+    """
+    Decorate logger in order to add custom levels for Nagios.
+    """
 
-	def custom_debug(msg, *args, **kwargs):
-		if logger.level >= debug_level:
-			return
-		logger._log(debug_level, msg, args, kwargs)
+    def custom_debug(msg, *args, **kwargs):
+        if logger.level >= debug_level:
+            return
+        logger._log(debug_level, msg, args, kwargs)
 
-	return custom_debug
+    return custom_debug
 
 
 def get_args():
-	"""
-	Supports the command-line arguments listed below.
-	"""
-	parser = argparse.ArgumentParser(description="Borealis Check")
-	parser._optionals.title = "Options"
-	parser.add_argument('-s', '--seconds-since-update', required=False,
-						help='how many seconds can the data file be out of date',
-						dest='seconds_since_update', type=float, default=5.0)
-	parser.add_argument('-v', '--verbose', required=False, help='enable verbose output',
-						dest='verbose', action='store_true')
-	parser.add_argument('--no-nagios', required=False, help='disable Nagios output mode',
-						dest='no_nagios_output', action='store_true')
-        parser.add_argument('-p', '--borealis-path', required=False, help='Path to Borealis directory', 
-                                                dest='borealis_path', default='/home/radar/borealis/')
-	args = parser.parse_args()
-	return args
-
-
-def main():
-	# Handling arguments
-	args = get_args()
-	seconds_since_update = args.seconds_since_update
-	verbose = args.verbose
-	no_nagios_output = args.no_nagios_output
-        borealis_path = args.borealis_path
-
-	# Logging settings
-	if verbose:
-		log_level = logging.DEBUG
-	else:
-		log_level = logging.INFO
-
-	if not no_nagios_output:
-		# Add custom level unknown
-		logging.addLevelName(logging.DEBUG + 1, 'UNKOWN')
-		setattr(mylogger, 'unkown', debug_factory(mylogger, logging.DEBUG + 1))
-
-		# Change INFO LevelName to OK
-		logging.addLevelName(logging.INFO, 'OK')
-
-		# Setting output format for Nagios
-                logging.basicConfig(stream=sys.stdout, format='BOREALIS %(levelname)s: %(message)s', level=logging.INFO)
-	else:
-		logging.basicConfig(stream=sys.stdout, format='%(asctime)s %(levelname)s %(message)s', level=log_level)
-
-	#if not os.environ["BOREALISPATH"]:
-	#	mylogger.critical("BOREALISPATH env variable not set")
-	#	sys.exit(UNKNOWN)
-	#config_path = os.environ["BOREALISPATH"] + "/config.ini"
-	if not os.path.exists(borealis_path):
-                mylogger.critical("BOREALISPATH: {} doesn't exist".format(borealis_path))
-		sys.exit(UNKNOWN)
-        config_path = borealis_path + "/config.ini" 
-        try:
-		with open(config_path, 'r') as config_data:
-			raw_config = json.load(config_data)
-			data_directory = raw_config["data_directory"]
-	except IOError:
-		mylogger.critical('Cannot open config file at {0}'.format(config_path))
-		sys.exit(UNKNOWN)
-        
-	#####################################
-	# Borealis data check               #
-	#####################################
-
-	# Get today's date and look for the current data file being written
-	today = datetime.datetime.today().strftime("%Y%m%d")
-	today_data_files = glob.glob("{}/{}/*".format(data_directory, today))
-	newest_file = max(today_data_files, key=os.path.getmtime)
-	new_file_write_time = os.path.getmtime(newest_file)
-	now_utc_seconds = float(datetime.datetime.utcnow().strftime("%s"))
-
-	# How many seconds ago was the last write to a data file?
-	last_data_write = now_utc_seconds - new_file_write_time
-	mylogger.debug('Write: {}, Now: {}, Diff: {} s'.format(new_file_write_time, now_utc_seconds, last_data_write))
-
-	# if under the threshold it is OK, if not then there's a problem
-	if float(last_data_write) <= float(seconds_since_update):
-		mylogger.info("%s seconds since last write" % last_data_write)
-		sys.exit(OK)
-	else:
-		mylogger.critical("%s" % last_data_write)
-		sys.exit(CRITICAL)
+    """
+    Supports the command-line arguments listed below.
+    """
+    parser = argparse.ArgumentParser(description="Borealis Check")
+    parser._optionals.title = "Options"
+    parser.add_argument('-s', '--seconds-since-update', required=False,
+                        help='how many seconds can the data file be out of date',
+                        dest='seconds_since_update', type=float, default=5.0)
+    parser.add_argument('-r', '--restart-after-seconds', type=int, default=900,
+                        help='How many seconds can the data file be out of date before attempting '
+                             'to restart the radar? Default 900 seconds (15 minutes)')
+    parser.add_argument('-v', '--verbose', required=False, help='enable verbose output',
+                        dest='verbose', action='store_true')
+    parser.add_argument('--no-nagios', required=False, help='disable Nagios output mode',
+                        dest='no_nagios_output', action='store_true')
+    parser.add_argument('-p', '--borealis-path', required=False, help='Path to Borealis directory',
+                        dest='borealis_path', default='/home/radar/borealis/')
+    args = parser.parse_args()
+    return args
 
 
 if __name__ == "__main__":
-    	main()
+    # Handling arguments
+    args = get_args()
+    seconds_since_update = args.seconds_since_update
+    verbose = args.verbose
+    no_nagios_output = args.no_nagios_output
+    borealis_path = args.borealis_path
+    restart_seconds = args.restart_after_seconds
 
+    if float(restart_seconds) < float(seconds_since_update):
+        # Adjust so that the restart seconds is the same as seconds_since update in case the user
+        # entered a lower number
+        mylogger.info('Restart seconds: {} s lower than seconds_since_update, '
+                      'adjusting to {} s'.format(restart_seconds, seconds_since_update))
+        restart_seconds = seconds_since_update
+
+    # Logging settings
+    if verbose:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+
+    if not no_nagios_output:
+        # Add custom level unknown
+        logging.addLevelName(logging.DEBUG + 1, 'UNKOWN')
+        setattr(mylogger, 'unkown', debug_factory(mylogger, logging.DEBUG + 1))
+
+        # Change INFO LevelName to OK
+        logging.addLevelName(logging.INFO, 'OK')
+
+        # Setting output format for Nagios
+        logging.basicConfig(stream=sys.stdout, format='BOREALIS %(levelname)s: %(message)s',
+                            level=logging.INFO)
+    else:
+        logging.basicConfig(stream=sys.stdout, format='%(asctime)s %(levelname)s %(message)s',
+                            level=log_level)
+
+    if not os.path.exists(borealis_path):
+        mylogger.critical("BOREALISPATH: {} doesn't exist".format(borealis_path))
+        sys.exit(UNKNOWN)
+
+    config_path = borealis_path + "/config.ini"
+    try:
+        with open(config_path) as config_data:
+            raw_config = json.load(config_data)
+            data_directory = raw_config["data_directory"]
+    except IOError:
+        mylogger.critical('Cannot open config file at {0}'.format(config_path))
+        sys.exit(UNKNOWN)
+
+    #####################################
+    # Borealis data check               #
+    #####################################
+
+    # Get today's date and look for the current data file being written
+    today = dt.today().strftime("%Y%m%d")
+    today_data_files = glob.glob("{}/{}/*".format(data_directory, today))
+    newest_file = max(today_data_files, key=os.path.getmtime)
+    new_file_write_time = os.path.getmtime(newest_file)
+    now_utc_seconds = float(dt.utcnow().strftime("%s"))
+
+    # How many seconds ago was the last write to a data file?
+    last_data_write = now_utc_seconds - new_file_write_time
+    mylogger.debug('Write: {}, Now: {}, Diff: {} s'.format(new_file_write_time, now_utc_seconds,
+                                                           last_data_write))
+
+    # if under the threshold it is OK, if not then there's a problem
+    if float(last_data_write) <= float(seconds_since_update):
+        mylogger.info("{} seconds since last write".format(last_data_write))
+        sys.exit(OK)
+    elif float(last_data_write) <= float(restart_seconds):
+        mylogger.critical("{}".format(last_data_write))
+        sys.exit(CRITICAL)
+    else:
+        # Now we attempt to restart Borealis
+        stop_borealis = subprocess.Popen("{}/stop_radar.sh".format(borealis_path),
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, error = stop_borealis.communicate()
+        # Check out the output to make sure it's all good (empty output means it's all good)
+        if error:
+            mylogger.critical('Attempting to restart Borealis: {}'.format(error))
+
+        time.sleep(5)
+
+        # Now call the start radar script, reads will block, so no need to communicate with
+        # this process.
+        start_borealis = subprocess.Popen("{}/start_radar.sh".format(borealis_path),
+                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        mylogger.critical('Borealis stop_radar.sh and start_radar.sh called')
+        sys.exit(CRITICAL)
