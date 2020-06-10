@@ -12,12 +12,17 @@ Classes
 Methods
 -------
 
+debug_factory: Create custom logging levels for Nagios
+get_args: Perform argparse argument parsing
+main: Determine if Borealis is running correctly by checking the files being written
+and if needed, attempt to restart Borealis.
 
 References
 ----------
 
 https://nagios-plugins.org/doc/guidelines.html
 https://gist.github.com/amine7536/d867dc177e69df3aef65
+http://users.telenet.be/mydotcom/howto/nagios/pluginsudo.html
 
 """
 import argparse
@@ -57,7 +62,6 @@ def get_args():
     Supports the command-line arguments listed below.
     """
     parser = argparse.ArgumentParser(description="Borealis Check")
-    parser._optionals.title = "Options"
     parser.add_argument('-s', '--seconds-since-update', required=False,
                         help='how many seconds can the data file be out of date',
                         dest='seconds_since_update', type=float, default=5.0)
@@ -81,14 +85,14 @@ if __name__ == "__main__":
     verbose = args.verbose
     no_nagios_output = args.no_nagios_output
     borealis_path = args.borealis_path
-    restart_seconds = args.restart_after_seconds
+    restart_after_seconds = args.restart_after_seconds
 
-    if float(restart_seconds) < float(seconds_since_update):
-        # Adjust so that the restart seconds is the same as seconds_since update in case the user
+    if float(restart_after_seconds) < float(seconds_since_update):
+        # Adjust so that restart_after_seconds is the same as seconds_since_update in case the user
         # entered a lower number
-        mylogger.info('Restart seconds: {} s lower than seconds_since_update, '
-                      'adjusting to {} s'.format(restart_seconds, seconds_since_update))
-        restart_seconds = seconds_since_update
+        mylogger.info('restart_after_seconds: {} s is lower than seconds_since_update, '
+                      'adjusting to {} s'.format(restart_after_seconds, seconds_since_update))
+        restart_after_seconds = seconds_since_update
 
     # Logging settings
     if verbose:
@@ -97,11 +101,11 @@ if __name__ == "__main__":
         log_level = logging.INFO
 
     if not no_nagios_output:
-        # Add custom level unknown
+        # Add custom level 'UNKNOWN'
         logging.addLevelName(logging.DEBUG + 1, 'UNKOWN')
         setattr(mylogger, 'unkown', debug_factory(mylogger, logging.DEBUG + 1))
 
-        # Change INFO LevelName to OK
+        # Change 'INFO' level name to 'OK'
         logging.addLevelName(logging.INFO, 'OK')
 
         # Setting output format for Nagios
@@ -129,7 +133,7 @@ if __name__ == "__main__":
     #####################################
 
     # Get today's date and look for the current data file being written
-    today = dt.today().strftime("%Y%m%d")
+    today = dt.utcnow().strftime("%Y%m%d")
     today_data_files = glob.glob("{}/{}/*".format(data_directory, today))
     newest_file = max(today_data_files, key=os.path.getmtime)
     new_file_write_time = os.path.getmtime(newest_file)
@@ -144,12 +148,13 @@ if __name__ == "__main__":
     if float(last_data_write) <= float(seconds_since_update):
         mylogger.info("{} seconds since last write".format(last_data_write))
         sys.exit(OK)
-    elif float(last_data_write) <= float(restart_seconds):
+    elif float(last_data_write) <= float(restart_after_seconds):
         mylogger.critical("{}".format(last_data_write))
         sys.exit(CRITICAL)
     else:
-        # Now we attempt to restart Borealis
-        stop_borealis = subprocess.Popen("{}/stop_radar.sh".format(borealis_path),
+        # Now we attempt to restart Borealis. Please see reference #3 above for more info on how to
+        # add nagios to the sudoers file to be able to execute stop_radar.sh and start_radar.sh
+        stop_borealis = subprocess.Popen("sudo -u radar {}/stop_radar.sh".format(borealis_path),
                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, error = stop_borealis.communicate()
         # Check out the output to make sure it's all good (empty output means it's all good)
@@ -160,7 +165,7 @@ if __name__ == "__main__":
 
         # Now call the start radar script, reads will block, so no need to communicate with
         # this process.
-        start_borealis = subprocess.Popen("{}/start_radar.sh".format(borealis_path),
+        start_borealis = subprocess.Popen("sudo -u radar {}/start_radar.sh".format(borealis_path),
                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         mylogger.critical('Borealis stop_radar.sh and start_radar.sh called')
         sys.exit(CRITICAL)
