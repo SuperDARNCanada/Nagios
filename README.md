@@ -72,6 +72,15 @@ Now to do passive checks from the client:
 * send\_nsca < [hostname of sender]	[service name]	[status (0|1|2)]	[message]	[return char]
 
 ### nsca installation on server
+
+#### Dependencies
+You'll need to install the following if you want cryptography enabled in nsca:
+ * https://sourceforge.net/projects/mhash/files/mhash/
+ * ftp://mcrypt.hellug.gr/pub/crypto/mcrypt/libmcrypt
+ * https://sourceforge.net/projects/mcrypt/files/MCrypt/
+ 
+#### NSCA
+
 The nsca daemon needs to run on the server for passive checks via send\_nsca from clients to work
 
 * tar xvf nsca-2.9.2.tar.gz
