@@ -4,6 +4,33 @@ Nagios monitoring configuration files for SuperDARN hardware and networks.
 ## Installation
 Nagios installation instructions can be found [here:](https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/4/en/quickstart.html)
 
+Here the steps are reproduced for OpenSuSe 15.1:
+ * sudo zypper --non-interactive install autoconf gcc glibc make wget unzip apache2 apache2-utils php7 apache2-mod_php7 gd gd-devel
+ * reboot
+ * (following as root)
+ * cd /tmp
+ * wget -O nagioscore.tar.gz https://github.com/NagiosEnterprises/nagioscore/archive/nagios-4.4.5.tar.gz
+ * tar xzf nagioscore.tar.gz
+ * cd nagioscore-nagios-4.4.5
+ * ./configure --with-httpd-conf=//etc/apache2/vhosts.d
+ * make all -j8
+ * sudo make install-groups-users
+ * sudo /usr/sbin/usermod -a -G nagios wwwrun
+ * make install 
+ * make install-daemoninit
+ * make install-commandmode
+ * make install-config
+ * sudo make install-webconf
+ * sudo /usr/sbin/a2enmod rewrite
+ * sudo /usr/sbin/a2enmod cgi
+ * sudo /usr/sbin/a2enmod version
+ * sudo /usr/sbin/a2enmod php7
+ * sudo systemctl enable apache2.service
+ * htpasswd2 -c /usr/local/nagios/etc/htpasswd.users nagiosadmin
+ * systemctl start apache2.service
+ * systemctl start nagios.service
+ 
+ 
 Instructions for installing and using NRPE can be found in [this](https://github.com/SuperDARNCanada/Nagios/blob/master/NRPE.pdf) PDF file. To properly use NRPE, you'll need to specify allowed hosts in the nrpe.cfg file. I've used hostnames here, but they can be IP addresses too.
 
 ### nrpe installation on client
