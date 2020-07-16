@@ -33,6 +33,18 @@ Here the steps are reproduced for OpenSuSe 15.1:
  
 Instructions for installing and using NRPE can be found in [this](https://github.com/SuperDARNCanada/Nagios/blob/master/NRPE.pdf) PDF file. To properly use NRPE, you'll need to specify allowed hosts in the nrpe.cfg file. I've used hostnames here, but they can be IP addresses too.
 
+For convenience, here are the steps required to install NRPE on the server:
+ * wget https://github.com/NagiosEnterprises/nrpe/rel;eases/download/nrpe-3.2.1/nrpe-3.2.1.tar.gz
+ * tar xvf nrpe-3.2.1.tar.gz
+ * cd nrpe-3.2.1/
+ * ./configure
+ * make check_nrpe
+ * sudo make install-plugin
+ 
+ Now to verify that it's working properly:
+ * /usr/local/nagios/lib/check_nrpe -H sasborealis.usask.ca
+ This should return the version of NRPE running, without a timeout.
+
 ### nrpe installation on client
 You may need to install openssl library before configuring nrpe. On openSuSE 15.1 that is accomplished by:
 
