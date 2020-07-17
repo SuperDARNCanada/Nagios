@@ -161,6 +161,28 @@ Many devices are going to be behind a router, with the potential for port forwar
 on those hosts can be accessed. There are several ways around this for checking on the host
 or the services.
 
+For hosts, you can add custom variables to the definitions like so for the _PORT and _NRPE_PORT:
+define host {
+        use                     linux-server
+        host_name               bcd
+        address                 104.160.221.191
+        _PORT                   50822
+        _NRPE_PORT              50866
+        check_command           check_ssh_custom_port
+}
+
+Then  these variables can be used in the definition of commands like so for using special ports for checking http and nrpe:
+define command {
+        command_name    check_nrpe_custom_port
+        command_line    $USER1$/check_nrpe -H $HOSTADDRESS$ -p $_HOSTNRPE_PORT$ -c $ARG1$ $ARG2$
+}
+define command {
+
+    command_name    check_http_custom_port
+    command_line    $USER1$/check_http -I $HOSTADDRESS$ -p $_HOSTPORT$ $ARG1$
+}
+
+
 Please see these forum posts: 
 https://support.nagios.com/forum/viewtopic.php?f=7&t=5087
 https://forums.meulie.net/t/problem-pinging-hosts-with-ip-address-through-a-port/4068
