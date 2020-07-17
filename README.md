@@ -162,6 +162,8 @@ on those hosts can be accessed. There are several ways around this for checking 
 or the services.
 
 For hosts, you can add custom variables to the definitions like so for the _PORT and _NRPE_PORT:
+
+```
 define host {
         use                     linux-server
         host_name               bcd
@@ -170,17 +172,22 @@ define host {
         _NRPE_PORT              50866
         check_command           check_ssh_custom_port
 }
+```
 
 Then  these variables can be used in the definition of commands like so for using special ports for checking http and nrpe:
+```
 define command {
+
         command_name    check_nrpe_custom_port
         command_line    $USER1$/check_nrpe -H $HOSTADDRESS$ -p $_HOSTNRPE_PORT$ -c $ARG1$ $ARG2$
 }
+
 define command {
 
     command_name    check_http_custom_port
     command_line    $USER1$/check_http -I $HOSTADDRESS$ -p $_HOSTPORT$ $ARG1$
 }
+```
 
 
 Please see these forum posts: 
