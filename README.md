@@ -2,6 +2,8 @@
 Nagios monitoring configuration files for SuperDARN hardware and networks.
 
 ## Installation
+
+### Nagios Core
 Nagios installation instructions can be found [here:](https://assets.nagios.com/downloads/nagioscore/docs/nagioscore/4/en/quickstart.html)
 
 Here the steps are reproduced for OpenSuSe 15.1:
@@ -30,6 +32,7 @@ Here the steps are reproduced for OpenSuSe 15.1:
  * systemctl start apache2.service
  * systemctl start nagios.service
  
+ ### NRPE 
  
 Instructions for installing and using NRPE can be found in [this](https://github.com/SuperDARNCanada/Nagios/blob/master/NRPE.pdf) PDF file. To properly use NRPE, you'll need to specify allowed hosts in the nrpe.cfg file. I've used hostnames here, but they can be IP addresses too.
 
@@ -44,6 +47,21 @@ For convenience, here are the steps required to install NRPE on the server:
  Now to verify that it's working properly:
  * /usr/local/nagios/lib/check_nrpe -H sasborealis.usask.ca
  This should return the version of NRPE running, without a timeout.
+
+### Nagios Plugins
+
+Instructions for installing Plugins are found in the Nagios installation instructions above, but they are reproduced here for convenience:
+
+ * cd /tmp
+ * wget --no-check-certificate -O nagios-plugins.tar.gz https://github.com/nagios-plugins/nagios-plugins/archive/release-2.2.1.tar.gz
+ * tar zxf nagios-plugins.tar.gz
+ * cd nagios-plugins-release-2.2.1/
+ * sudo ./tools/setup
+ * sudo ./configure
+ * sudo make
+ * sudo make install
+
+Now you should have the appropriate plugins located in /usr/local/nagios/lib/ or wherever you've defined the nagios location to be.
 
 ### nrpe installation on client
 You may need to install openssl library before configuring nrpe. On openSuSE 15.1 that is accomplished by:
