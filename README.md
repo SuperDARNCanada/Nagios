@@ -156,14 +156,29 @@ The nsca daemon listens for incoming packets that look like so, with tab charact
 
 ## Usage notes
 
+### How to deal with hosts behind a router, with port forwarding
+Many devices are going to be behind a router, with the potential for port forwarding so that services
+on those hosts can be accessed. There are several ways around this for checking on the host
+or the services.
+
+Please see these forum posts: 
+https://support.nagios.com/forum/viewtopic.php?f=7&t=5087
+https://forums.meulie.net/t/problem-pinging-hosts-with-ip-address-through-a-port/4068
+
+### Updating server configuration
+
 On the Nagios server, any time you make a change to a configuration file you must reload the nagios service:
 
 * sudo systemctl restart nagios.service
+
+### Change the nagios web interface password
 
 Log into the web interface on the nagios server and log in via the nagiosadmin password
 To change the password for nagiosadmin:
 
 * sudo htpasswd /usr/local/nagios/etc/htpasswd.users nagiosadmin
+
+### Basic troubleshooting
 
 If you have any issues with things not running make sure of the following:
 1. nagios:nagios are the user and group that own the binaries for nagios and permissions are appropriate
